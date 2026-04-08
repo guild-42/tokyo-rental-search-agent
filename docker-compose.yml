@@ -1,11 +1,11 @@
 services:
   rental-search:
     build: .
-    ports:
-      - "8080:8080"
+    container_name: tokyo-rental-search
     volumes:
       - rental-data:/app/data
     environment:
+      TZ: Asia/Tokyo
       # Fetch every 3 hours (preferred). Set to empty to disable.
       FETCH_INTERVAL_HOURS: "3"
       # Or use specific hours (ignored if FETCH_INTERVAL_HOURS is set):
@@ -16,6 +16,9 @@ services:
       MAX_AGE_DAYS: "30"
       DB_PATH: "/app/data/rental.db"
     restart: unless-stopped
+    networks:
+      - coolify
+      - default
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
@@ -23,5 +26,10 @@ services:
       retries: 3
       start_period: 30s
 
+networks:
+  coolify:
+    external: true
+
 volumes:
   rental-data:
+    driver: local
