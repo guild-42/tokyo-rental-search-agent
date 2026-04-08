@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>いい物件は7日まで</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="style.css?v=20260408">
+</head>
+<body>
+  <header>
+    <h1>いい物件は7日まで</h1>
+    <div id="status">
+      <span id="last-fetch">-</span>
+      <span id="count-badge">0件</span>
+    </div>
+  </header>
+
+  <main>
+    <aside id="filter-panel">
+      <h2>フィルタ</h2>
+
+      <label>予算 (万円)</label>
+      <div class="range-row">
+        <input type="number" id="rent-min" placeholder="下限" step="0.5">
+        <span>〜</span>
+        <input type="number" id="rent-max" placeholder="上限" step="0.5">
+      </div>
+
+      <label>経過日数 (日)</label>
+      <div class="range-row">
+        <input type="number" id="days-min" placeholder="0" min="0" max="60">
+        <span>〜</span>
+        <input type="number" id="days-max" placeholder="20" min="0" max="60">
+      </div>
+
+      <label>間取り</label>
+      <div id="layout-checks" class="checkbox-grid">
+        <label><input type="checkbox" value="1R">1R</label>
+        <label><input type="checkbox" value="1K">1K</label>
+        <label><input type="checkbox" value="1DK">1DK</label>
+        <label><input type="checkbox" value="1LDK">1LDK</label>
+        <label><input type="checkbox" value="2K">2K</label>
+        <label><input type="checkbox" value="2DK">2DK</label>
+        <label><input type="checkbox" value="2LDK">2LDK</label>
+        <label><input type="checkbox" value="3LDK">3LDK</label>
+      </div>
+
+      <label>エリア</label>
+      <div id="ward-checks" class="checkbox-grid"></div>
+
+      <label>駅徒歩 (分以内)</label>
+      <input type="number" id="walk-max" placeholder="例: 10">
+
+      <label>築年数 (年以内)</label>
+      <input type="number" id="age-max" placeholder="例: 15">
+
+      <label>面積 (㎡以上)</label>
+      <input type="number" id="size-min" placeholder="例: 25" step="0.5">
+
+      <label>ソース</label>
+      <div id="source-checks" class="checkbox-grid"></div>
+
+      <label>キーワード</label>
+      <input type="text" id="keyword" placeholder="建物名、住所...">
+
+      <label class="checkbox-single">
+        <input type="checkbox" id="bookmark-only"> ブックマークのみ
+      </label>
+
+      <label class="checkbox-single">
+        <input type="checkbox" id="hide-viewed"> 閲覧済みを非表示
+      </label>
+
+      <button id="btn-reset" onclick="resetFilters()">フィルタリセット</button>
+    </aside>
+
+    <section id="content">
+      <div id="map-container">
+        <div id="map"></div>
+      </div>
+
+      <div id="list-header">
+        <span id="filtered-count">0件表示</span>
+        <select id="sort-select">
+          <option value="freshness">鮮度順</option>
+          <option value="rent-asc">家賃 ↑</option>
+          <option value="rent-desc">家賃 ↓</option>
+          <option value="size-desc">面積 ↓</option>
+          <option value="age-asc">築浅順</option>
+          <option value="walk-asc">駅近順</option>
+        </select>
+      </div>
+
+      <div id="property-list"></div>
+    </section>
+  </main>
+
+  <script src="app.js?v=20260408"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+services:
+  rental-search:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - rental-data:/app/data
+    environment:
+      # Fetch every 3 hours (preferred). Set to empty to disable.
+      FETCH_INTERVAL_HOURS: "3"
+      # Or use specific hours (ignored if FETCH_INTERVAL_HOURS is set):
+      # FETCH_SCHEDULE_HOURS: "9,12,15,18,21"
+      FETCH_MAX_PAGES: "10"
+      # Target wards: 新宿区=13104, 渋谷区=13113, 中野区=13114
+      FETCH_WARD_CODES: "13104,13113,13114"
+      MAX_AGE_DAYS: "30"
+      DB_PATH: "/app/data/rental.db"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  rental-data:

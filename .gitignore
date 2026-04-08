@@ -1,0 +1,32 @@
+# Data / runtime
+data/rental.db
+data/rental.db-shm
+data/rental.db-wal
+data/latest.json
+data/history/
+data/*.json
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Env
+.env
+.env.local
