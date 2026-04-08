@@ -1,19 +1,21 @@
 services:
-  rental-search:
+  app:
     build: .
+    expose:
+      - "8080"
     volumes:
       - rental-data:/app/data
     environment:
-      TZ: Asia/Tokyo
-      FETCH_INTERVAL_HOURS: "3"
-      FETCH_MAX_PAGES: "10"
-      FETCH_WARD_CODES: "13104,13113,13114"
-      MAX_AGE_DAYS: "30"
-      DB_PATH: "/app/data/rental.db"
+      # Coolify magic variable: generates Traefik labels for the given port.
+      # Set the actual domain in Coolify UI -> Environment Variables.
+      - SERVICE_FQDN_APP_8080
+      - TZ=Asia/Tokyo
+      - FETCH_INTERVAL_HOURS=3
+      - FETCH_MAX_PAGES=10
+      - FETCH_WARD_CODES=13104,13113,13114
+      - MAX_AGE_DAYS=30
+      - DB_PATH=/app/data/rental.db
     restart: unless-stopped
-    networks:
-      - coolify
-      - default
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
@@ -21,10 +23,5 @@ services:
       retries: 3
       start_period: 30s
 
-networks:
-  coolify:
-    external: true
-
 volumes:
   rental-data:
-    driver: local
