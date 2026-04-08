@@ -6,10 +6,6 @@ services:
     volumes:
       - rental-data:/app/data
     environment:
-      # Coolify magic variable: generates Traefik labels for port 8080.
-      # The "=/" marks this as a path-routed FQDN; Coolify creates a
-      # Domains field in the UI where the actual hostname is set.
-      - SERVICE_FQDN_APP_8080=/
       - TZ=Asia/Tokyo
       - FETCH_INTERVAL_HOURS=3
       - FETCH_MAX_PAGES=10
@@ -17,6 +13,17 @@ services:
       - MAX_AGE_DAYS=30
       - DB_PATH=/app/data/rental.db
     restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rental-http.rule=Host(`7days.actraise.org`)
+      - traefik.http.routers.rental-http.entrypoints=http
+      - traefik.http.routers.rental-http.middlewares=redirect-to-https
+      - traefik.http.routers.rental-https.rule=Host(`7days.actraise.org`)
+      - traefik.http.routers.rental-https.entrypoints=https
+      - traefik.http.routers.rental-https.tls=true
+      - traefik.http.routers.rental-https.tls.certresolver=letsencrypt
+      - traefik.http.routers.rental-https.middlewares=gzip
+      - traefik.http.services.rental.loadbalancer.server.port=8080
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
