@@ -15,14 +15,10 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.rental-http.rule=Host(`7days.actraise.org`)
-      - traefik.http.routers.rental-http.entrypoints=http
-      - traefik.http.routers.rental-http.middlewares=redirect-to-https
-      - traefik.http.routers.rental-https.rule=Host(`7days.actraise.org`)
-      - traefik.http.routers.rental-https.entrypoints=https
-      - traefik.http.routers.rental-https.tls=true
-      - traefik.http.routers.rental-https.tls.certresolver=letsencrypt
-      - traefik.http.routers.rental-https.middlewares=gzip
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.routers.rental.rule=Host(`7days.actraise.org`)
+      - traefik.http.routers.rental.entrypoints=http
+      - traefik.http.routers.rental.middlewares=gzip
       - traefik.http.services.rental.loadbalancer.server.port=8080
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
