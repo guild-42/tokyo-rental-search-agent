@@ -6,7 +6,7 @@
   <title>いい物件は7日まで</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260408">
+  <link rel="stylesheet" href="style.css?v=20260415">
 </head>
 <body>
   <header>
@@ -70,6 +70,10 @@
         <input type="checkbox" id="hide-viewed"> 閲覧済みを非表示
       </label>
 
+      <label class="checkbox-single">
+        <input type="checkbox" id="map-bounds-only" checked> 地図内の物件のみ表示
+      </label>
+
       <button id="btn-reset" onclick="resetFilters()">フィルタリセット</button>
     </aside>
 
@@ -94,6 +98,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=20260408"></script>
+  <script src="app.js?v=20260415"></script>
 </body>
 </html>

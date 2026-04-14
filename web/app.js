@@ -145,6 +145,8 @@ function saveFilters() {
     keyword: document.getElementById("keyword").value,
     bookmarkOnly: document.getElementById("bookmark-only").checked,
     hideViewed: document.getElementById("hide-viewed").checked,
+    mapBoundsOnly: !!(document.getElementById("map-bounds-only") &&
+      document.getElementById("map-bounds-only").checked),
     sort: document.getElementById("sort-select").value,
     layouts: getCheckedValues("layout-checks"),
     sources: getCheckedValues("source-checks"),
@@ -168,6 +170,10 @@ function restoreFilters() {
     if (state.keyword) document.getElementById("keyword").value = state.keyword;
     if (state.bookmarkOnly) document.getElementById("bookmark-only").checked = true;
     if (state.hideViewed) document.getElementById("hide-viewed").checked = true;
+    var boundsOnly = document.getElementById("map-bounds-only");
+    if (boundsOnly && typeof state.mapBoundsOnly === "boolean") {
+      boundsOnly.checked = state.mapBoundsOnly;
+    }
     if (state.sort) document.getElementById("sort-select").value = state.sort;
 
     // Restore layout checkboxes
@@ -210,6 +216,11 @@ function initMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   }).addTo(map);
+
+  // Re-filter list as the user pans/zooms. Debounced so dragging stays smooth.
+  var debouncedViewChange = debounce(onMapViewChanged, 120);
+  map.on("moveend", debouncedViewChange);
+  map.on("zoomend", debouncedViewChange);
 }
 
 async function loadData() {
@@ -290,6 +301,14 @@ function setupFilters() {
   document.getElementById("bookmark-only").addEventListener("change", applyFilters);
   document.getElementById("hide-viewed").addEventListener("change", applyFilters);
 
+  var boundsOnly = document.getElementById("map-bounds-only");
+  if (boundsOnly) {
+    boundsOnly.addEventListener("change", function() {
+      saveFilters();
+      renderList();
+    });
+  }
+
   document.querySelectorAll("#layout-checks input").forEach(function(cb) {
     cb.addEventListener("change", applyFilters);
   });
@@ -337,8 +356,28 @@ function applyFilters() {
   sortProperties(filteredProperties, sort);
 
   saveFilters();
-  renderList();
-  renderMap();
+  renderMap();      // plot every marker the filter allows
+  renderList();     // renderList further narrows to current map bounds
+}
+
+// Pan/zoom the map without redrawing markers: just re-filter the list to the
+// properties whose markers are currently visible.
+function onMapViewChanged() {
+  if (document.getElementById("map-bounds-only") && document.getElementById("map-bounds-only").checked) {
+    renderList();
+  }
+}
+
+function propertiesVisibleOnMap() {
+  var boundsOnly = document.getElementById("map-bounds-only");
+  if (!boundsOnly || !boundsOnly.checked || !map) {
+    return filteredProperties;
+  }
+  var bounds = map.getBounds();
+  return filteredProperties.filter(function(p) {
+    if (!p.lat || !p.lng) return false;
+    return bounds.contains([p.lat, p.lng]);
+  });
 }
 
 function sortProperties(props, sort) {
@@ -401,26 +440,36 @@ function formatRent(yen) {
 function renderList() {
   var container = document.getElementById("property-list");
   container.replaceChildren();
-  document.getElementById("filtered-count").textContent = filteredProperties.length + "件表示";
 
-  if (filteredProperties.length === 0) {
+  var visible = propertiesVisibleOnMap();
+  var boundsOnly = document.getElementById("map-bounds-only") &&
+    document.getElementById("map-bounds-only").checked;
+  var countLabel = visible.length + "件表示";
+  if (boundsOnly && visible.length !== filteredProperties.length) {
+    countLabel += " (全 " + filteredProperties.length + "件中)";
+  }
+  document.getElementById("filtered-count").textContent = countLabel;
+
+  if (visible.length === 0) {
     var msg = document.createElement("p");
     msg.style.cssText = "padding:20px;color:#999;text-align:center";
-    msg.textContent = "条件に合う物件がありません";
+    msg.textContent = boundsOnly
+      ? "この地図範囲内には物件がありません（地図を移動/縮小するか、チェックを外してください）"
+      : "条件に合う物件がありません";
     container.appendChild(msg);
     return;
   }
 
-  var toRender = filteredProperties.slice(0, 200);
+  var toRender = visible.slice(0, 200);
   toRender.forEach(function(p) {
     var card = createPropertyCard(p);
     container.appendChild(card);
   });
 
-  if (filteredProperties.length > 200) {
+  if (visible.length > 200) {
     var more = document.createElement("p");
     more.style.cssText = "padding:12px;color:#999;text-align:center";
-    more.textContent = "他 " + (filteredProperties.length - 200) + " 件...";
+    more.textContent = "他 " + (visible.length - 200) + " 件...";
     container.appendChild(more);
   }
 }
@@ -531,12 +580,19 @@ function createPropertyCard(p) {
   return card;
 }
 
+// Kept true on first render so the map auto-fits to the full result set once.
+// After that we leave the user's pan/zoom alone so the map-bounds list filter
+// and every subsequent filter edit doesn't yank the viewport around.
+var shouldAutoFitBounds = true;
+
 function renderMap() {
   markers.forEach(function(m) { map.removeLayer(m); });
   markers = [];
 
   var withCoords = filteredProperties.filter(function(p) { return p.lat && p.lng; });
-  var toPlot = withCoords.slice(0, 500);
+  // No hard cap — Leaflet handles ~10k markers fine, and the old 500 cap was
+  // silently dropping most pins once results exceeded that.
+  var toPlot = withCoords;
 
   toPlot.forEach(function(p) {
     var days = Math.min(p._daysAge, 6);
@@ -597,9 +653,10 @@ function renderMap() {
     markers.push(marker);
   });
 
-  if (markers.length > 0) {
+  if (markers.length > 0 && shouldAutoFitBounds) {
     var group = L.featureGroup(markers);
     map.fitBounds(group.getBounds().pad(0.1));
+    shouldAutoFitBounds = false;
   }
 }
 
