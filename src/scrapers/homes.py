@@ -47,8 +47,8 @@ class HomesScraper(BaseScraper):
 
     name = "homes"
     base_url = "https://www.homes.co.jp"
-    rate_limit = 2.0
-    max_pages = 5
+    rate_limit = 3.0
+    max_pages = 60
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
@@ -56,9 +56,16 @@ class HomesScraper(BaseScraper):
         self._current_slug = HOMES_WARD_SLUGS.get(self.ward_codes[0], "") if self.ward_codes else ""
 
     def build_url(self, page: int) -> str:
+        # Filter: rent ≤ 10万 (cond[monthmoneyroomh]=10.0), sorted newest first.
+        # URL-encode the bracketed keys since HOMES expects them bracket-encoded.
+        filters = (
+            "cond%5Bmonthmoneyroom%5D=0"
+            "&cond%5Bmonthmoneyroomh%5D=10.0"
+            "&cond%5Bsortby%5D=newdate"
+        )
         if self._current_slug:
-            return f"{self.base_url}/chintai/tokyo/{self._current_slug}/list/?sort=new&page={page}"
-        return f"{self.base_url}/chintai/tokyo/list/?sort=new&page={page}"
+            return f"{self.base_url}/chintai/tokyo/{self._current_slug}/list/?{filters}&page={page}"
+        return f"{self.base_url}/chintai/tokyo/list/?{filters}&page={page}"
 
     async def fetch_latest(self) -> list[dict]:
         """Override: fetch each ward separately, then combine."""
@@ -74,6 +81,17 @@ class HomesScraper(BaseScraper):
             all_listings.extend(listings)
             logger.info(f"[{self.name}] {ward_name}: {len(listings)} listings")
         return all_listings
+
+    def parse_total_count(self, html: str) -> int | None:
+        """HOME'S shows 'X件（総物件数：Y件）' — prefer the room-level count (X)."""
+        m = re.search(r"([\d,]+)件（総物件数[：:]", html)
+        if m:
+            try:
+                return int(m.group(1).replace(",", ""))
+            except ValueError:
+                pass
+        from .base import parse_total_count_japanese
+        return parse_total_count_japanese(html)
 
     def parse_listings(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "html.parser")

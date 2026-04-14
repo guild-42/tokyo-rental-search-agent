@@ -115,6 +115,43 @@ def cmd_stats(args):
     print(f"{'='*50}\n")
 
 
+def cmd_verify(args):
+    """Compare advertised total counts vs. actually-scraped counts per source."""
+    from src.scrapers.suumo import TOKYO_WARD_CODES
+    from src.verify import format_report, verify_coverage
+
+    ward_codes = None
+    if args.wards:
+        ward_codes = []
+        for w in args.wards.split(","):
+            w = w.strip()
+            if w in TOKYO_WARD_CODES:
+                ward_codes.append(TOKYO_WARD_CODES[w])
+            else:
+                print(f"Unknown ward: {w}")
+                return
+
+    print(f"Running coverage check (pages={args.pages}, wards={ward_codes or 'default'})...\n")
+    reports = asyncio.run(verify_coverage(ward_codes, max_pages=args.pages))
+    print(format_report(reports))
+
+
+def cmd_prune(args):
+    """Delete DB rows outside the allowed wards (新宿 / 渋谷 / 中野)."""
+    from src.db import init_db, prune_wards
+    from src.orchestrator import ALLOWED_WARD_NAMES
+
+    db_path = Path(args.db) if args.db else DEFAULT_DB_PATH
+    if not db_path.exists():
+        print(f"Database not found: {db_path}")
+        return
+
+    conn = init_db(db_path)
+    deleted = prune_wards(conn, list(ALLOWED_WARD_NAMES))
+    conn.close()
+    print(f"Pruned {deleted} properties outside {list(ALLOWED_WARD_NAMES)}")
+
+
 def cmd_migrate(args):
     """Migrate existing JSON data to SQLite (one-time)."""
     from src.db import init_db, upsert_properties
@@ -169,6 +206,8 @@ Examples:
   python main.py serve --port 3000               # Custom port
   python main.py serve --schedule "9,12,15,18,21" # Fetch at specific hours
   python main.py stats                           # Show DB statistics
+  python main.py verify                          # Check advertised vs actual count per source
+  python main.py prune                           # Delete properties outside 新宿/渋谷/中野
   python main.py migrate                         # Migrate JSON → SQLite
 
 Environment variables:
@@ -185,7 +224,7 @@ Environment variables:
     # fetch
     fetch_p = sub.add_parser("fetch", help="Fetch latest rental listings")
     fetch_p.add_argument("--wards", type=str, default=None, help="Comma-separated ward names (e.g. '渋谷区,目黒区')")
-    fetch_p.add_argument("--pages", type=int, default=10, help="Max pages per source (default: 10)")
+    fetch_p.add_argument("--pages", type=int, default=None, help="(Ignored — each scraper uses its own max_pages; kept for backward compat)")
     fetch_p.add_argument("--db", type=str, default=None, help="Database path (default: data/rental.db)")
     fetch_p.set_defaults(func=cmd_fetch)
 
@@ -206,6 +245,17 @@ Environment variables:
     migrate_p = sub.add_parser("migrate", help="Migrate JSON data to SQLite (one-time)")
     migrate_p.add_argument("--db", type=str, default=None, help="Database path (default: data/rental.db)")
     migrate_p.set_defaults(func=cmd_migrate)
+
+    # prune
+    prune_p = sub.add_parser("prune", help="Delete properties outside 新宿/渋谷/中野 (one-time)")
+    prune_p.add_argument("--db", type=str, default=None, help="Database path (default: data/rental.db)")
+    prune_p.set_defaults(func=cmd_prune)
+
+    # verify
+    verify_p = sub.add_parser("verify", help="Compare advertised vs. scraped counts per source")
+    verify_p.add_argument("--wards", type=str, default=None, help="Comma-separated ward names (default: the configured set)")
+    verify_p.add_argument("--pages", type=int, default=None, help="Max pages per source (default: use each scraper's own setting)")
+    verify_p.set_defaults(func=cmd_verify)
 
     args = parser.parse_args()
 

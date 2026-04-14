@@ -43,7 +43,7 @@ class ApamanshopScraper(BaseScraper):
     name = "apamanshop"
     base_url = "https://www.apamanshop.com"
     rate_limit = 2.0
-    max_pages = 3
+    max_pages = 20
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
@@ -74,10 +74,16 @@ class ApamanshopScraper(BaseScraper):
         self._current_code = self.apaman_codes[0]
 
     def build_url(self, page: int) -> str:
+        # tinryo1 / tinryo2 are rent min / max in yen units. 100000 = 10万円.
         code = self._current_code
+        filters = "tinryo1=0&tinryo2=100000"
         if page == 1:
-            return f"{self.base_url}/tokyo/{code}/"
-        return f"{self.base_url}/tokyo/{code}/?page={page}"
+            return f"{self.base_url}/tokyo/{code}/?{filters}"
+        return f"{self.base_url}/tokyo/{code}/?{filters}&page={page}"
+
+    def parse_total_count(self, html: str) -> int | None:
+        from .base import parse_total_count_japanese
+        return parse_total_count_japanese(html)
 
     async def fetch_latest(self) -> list[dict]:
         all_listings: list[dict] = []

@@ -139,6 +139,29 @@ def run_lifecycle(conn: sqlite3.Connection) -> dict:
     return stats
 
 
+def prune_wards(conn: sqlite3.Connection, allowed_wards: list[str]) -> int:
+    """Delete properties whose ward is not in the allowed list.
+
+    Properties with empty/null ward are also deleted (treated as noise).
+    Returns the number of rows removed.
+    """
+    if not allowed_wards:
+        return 0
+
+    placeholders = ",".join("?" for _ in allowed_wards)
+    query = (
+        f"DELETE FROM properties "
+        f"WHERE COALESCE(json_extract(data, '$.ward'), '') = '' "
+        f"   OR json_extract(data, '$.ward') NOT IN ({placeholders})"
+    )
+    cur = conn.execute(query, allowed_wards)
+    deleted = cur.rowcount
+    conn.commit()
+    if deleted:
+        logger.info(f"prune_wards: deleted {deleted} rows outside {allowed_wards}")
+    return deleted
+
+
 def mark_stale(conn: sqlite3.Connection, current_ids: set[str], fetched_sources: list[str] | None = None, fetched_wards: list[str] | None = None) -> int:
     """Mark active properties not in current_ids as stale.
 

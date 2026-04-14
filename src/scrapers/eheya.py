@@ -30,7 +30,7 @@ class EheyaScraper(BaseScraper):
     name = "eheya"
     base_url = "https://www.eheya.net"
     rate_limit = 2.0
-    max_pages = 3
+    max_pages = 30
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
@@ -40,9 +40,12 @@ class EheyaScraper(BaseScraper):
     def build_url(self, page: int) -> str:
         code = self._current_ward_code
         offset = (page - 1) * 20
+        # Best-effort rent filter via the SPA's URL state. Even if eheya's
+        # frontend ignores it, client-side rent cap in orchestrator keeps us safe.
+        filters = "detail.priceMax=YEN_100000"
         if page == 1:
-            return f"{self.base_url}/tokyo/area/{code}/search/"
-        return f"{self.base_url}/tokyo/area/{code}/search/?offset={offset}"
+            return f"{self.base_url}/tokyo/area/{code}/search/?{filters}"
+        return f"{self.base_url}/tokyo/area/{code}/search/?{filters}&offset={offset}"
 
     async def fetch_latest(self) -> list[dict]:
         all_listings: list[dict] = []
@@ -54,6 +57,21 @@ class EheyaScraper(BaseScraper):
             all_listings.extend(listings)
             logger.info(f"[{self.name}] {ward_name}: {len(listings)} listings")
         return all_listings
+
+    def parse_total_count(self, html: str) -> int | None:
+        soup = BeautifulSoup(html, "html.parser")
+        script = soup.select_one("script#__NEXT_DATA__")
+        if not script or not script.string:
+            return None
+        try:
+            data = json.loads(script.string)
+        except json.JSONDecodeError:
+            return None
+        bsr = data.get("props", {}).get("pageProps", {}).get("buildingSearchResult", {})
+        total = bsr.get("total") or bsr.get("totalCount") or bsr.get("count")
+        if isinstance(total, int) and total > 0:
+            return total
+        return None
 
     def parse_listings(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "html.parser")

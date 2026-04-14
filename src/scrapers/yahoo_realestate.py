@@ -46,7 +46,10 @@ class YahooRealestateScraper(BaseScraper):
     name = "yahoo"
     base_url = "https://realestate.yahoo.co.jp"
     rate_limit = 2.5
-    max_pages = 5
+    # Yahoo doesn't accept any URL-based rent filter we can find. We grab
+    # deeply, rely on base.py's early-stop when a whole page > 10万, and on
+    # the orchestrator's final rent filter.
+    max_pages = 100
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
@@ -70,6 +73,11 @@ class YahooRealestateScraper(BaseScraper):
             all_listings.extend(listings)
             logger.info(f"[{self.name}] {ward_name}: {len(listings)} listings")
         return all_listings
+
+    def parse_total_count(self, html: str) -> int | None:
+        """Yahoo!不動産 shows '全XX件中' in the result header."""
+        from .base import parse_total_count_japanese
+        return parse_total_count_japanese(html)
 
     def parse_listings(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "html.parser")

@@ -34,10 +34,11 @@ docker compose up -d
 
 | Var | Default | 説明 |
 |-----|---------|------|
-| `FETCH_INTERVAL_HOURS` | `3` | N時間ごとにfetch（最優先） |
-| `FETCH_SCHEDULE_HOURS` | `9,12,15,18,21` | 特定時刻にfetch（`FETCH_INTERVAL_HOURS`未設定時のみ） |
+| `FETCH_INTERVAL_MINUTES` | `30` | N分ごとにfetch（最優先） |
+| `FETCH_INTERVAL_HOURS` | - | 旧・時間単位（`FETCH_INTERVAL_MINUTES`未設定時のfallback） |
+| `FETCH_SCHEDULE_HOURS` | `9,12,15,18,21` | 特定時刻にfetch（intervalが未設定のときのみ） |
 | `FETCH_MAX_PAGES` | `10` | ソースごとの最大ページ数 |
-| `FETCH_WARD_CODES` | `13104,13113,13114` | 区コード（新宿,渋谷,中野） |
+| `FETCH_WARD_CODES` | `13104,13113,13114` | **対象区は新宿/渋谷/中野に固定**（コードレベルで強制） |
 | `MAX_AGE_DAYS` | `30` | 表示する物件の最大経過日数 |
 | `DB_PATH` | `/app/data/rental.db` | SQLiteパス |
 

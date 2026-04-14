@@ -147,7 +147,6 @@ function saveFilters() {
     hideViewed: document.getElementById("hide-viewed").checked,
     sort: document.getElementById("sort-select").value,
     layouts: getCheckedValues("layout-checks"),
-    wards: getCheckedValues("ward-checks"),
     sources: getCheckedValues("source-checks"),
   };
   localStorage.setItem(LS_FILTERS_KEY, JSON.stringify(state));
@@ -178,21 +177,14 @@ function restoreFilters() {
       });
     }
 
-    // Ward and source checkboxes are built dynamically after data loads,
+    // Source checkboxes are built dynamically after data loads,
     // so we store the values and apply them after build
-    restoreFilters._pendingWards = state.wards || [];
     restoreFilters._pendingSources = state.sources || [];
   } catch (e) { /* ignore */ }
 }
-restoreFilters._pendingWards = [];
 restoreFilters._pendingSources = [];
 
 function applyPendingDynamicFilters() {
-  if (restoreFilters._pendingWards.length > 0) {
-    document.querySelectorAll("#ward-checks input").forEach(function(cb) {
-      cb.checked = restoreFilters._pendingWards.indexOf(cb.value) !== -1;
-    });
-  }
   if (restoreFilters._pendingSources.length > 0) {
     document.querySelectorAll("#source-checks input").forEach(function(cb) {
       cb.checked = restoreFilters._pendingSources.indexOf(cb.value) !== -1;
@@ -255,7 +247,6 @@ async function loadData() {
         d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
     }
 
-    buildWardChecks();
     buildSourceChecks();
 
   } catch (e) {
@@ -265,27 +256,6 @@ async function loadData() {
     msg.textContent = "データがありません。python main.py fetch を実行してください。";
     document.getElementById("property-list").appendChild(msg);
   }
-}
-
-function buildWardChecks() {
-  var wards = [];
-  var seen = {};
-  allProperties.forEach(function(p) {
-    if (p.ward && !seen[p.ward]) { wards.push(p.ward); seen[p.ward] = true; }
-  });
-  wards.sort();
-  var container = document.getElementById("ward-checks");
-  container.replaceChildren();
-  wards.forEach(function(w) {
-    var label = document.createElement("label");
-    var cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.value = w;
-    cb.addEventListener("change", applyFilters);
-    label.appendChild(cb);
-    label.appendChild(document.createTextNode(w));
-    container.appendChild(label);
-  });
 }
 
 function buildSourceChecks() {
@@ -344,7 +314,6 @@ function applyFilters() {
   var bookmarkOnly = document.getElementById("bookmark-only").checked;
   var hideViewed = document.getElementById("hide-viewed").checked;
   var layouts = getCheckedValues("layout-checks");
-  var wards = getCheckedValues("ward-checks");
   var sources = getCheckedValues("source-checks");
 
   filteredProperties = allProperties.filter(function(p) {
@@ -356,7 +325,6 @@ function applyFilters() {
     if (p.building_age_years != null && p.building_age_years > ageMax) return false;
     if (p.size_sqm != null && p.size_sqm < sizeMin) return false;
     if (layouts.length > 0 && layouts.indexOf(p.layout) === -1) return false;
-    if (wards.length > 0 && wards.indexOf(p.ward) === -1) return false;
     if (sources.length > 0 && sources.indexOf(p.source) === -1) return false;
     if (keyword) {
       var text = [p.name, p.address, p.nearest_station, p.line].join(" ").toLowerCase();
@@ -416,7 +384,7 @@ function resetFilters() {
   document.getElementById("bookmark-only").checked = false;
   document.getElementById("hide-viewed").checked = false;
   document.getElementById("sort-select").value = "freshness";
-  document.querySelectorAll("#layout-checks input, #ward-checks input, #source-checks input")
+  document.querySelectorAll("#layout-checks input, #source-checks input")
     .forEach(function(cb) { cb.checked = false; });
   applyFilters();
 }

@@ -34,17 +34,42 @@ class DoorScraper(BaseScraper):
     name = "door"
     base_url = "https://door.ac"
     rate_limit = 2.0
-    max_pages = 5
+    max_pages = 150
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
-        # DOOR uses different URL structure - just fetch all Tokyo
-        self.ward_codes = ward_codes
+        # DOOR uses per-ward URLs like /tokyo/city-13104/list — we iterate over
+        # each ward rather than grabbing "all Tokyo" (which previously returned
+        # 121,747件 with no ward filter).
+        self.ward_codes = ward_codes or []
+        self._current_ward_code: str = self.ward_codes[0] if self.ward_codes else "13104"
 
     def build_url(self, page: int) -> str:
+        code = self._current_ward_code
         if page == 1:
-            return f"{self.base_url}/tokyo/list"
-        return f"{self.base_url}/tokyo/list?page={page}"
+            return f"{self.base_url}/tokyo/city-{code}/list"
+        return f"{self.base_url}/tokyo/city-{code}/list?page={page}"
+
+    async def fetch_latest(self) -> list[dict]:
+        all_listings: list[dict] = []
+        if not self.ward_codes:
+            return all_listings
+        for code in self.ward_codes:
+            self._current_ward_code = code
+            logger.info(f"[{self.name}] fetching ward: {code}")
+            listings = await super().fetch_latest()
+            all_listings.extend(listings)
+            logger.info(f"[{self.name}] city-{code}: {len(listings)} listings")
+        return all_listings
+
+    def parse_total_count(self, html: str) -> int | None:
+        m = re.search(r"([\d,]+)\s*件の物件", html)
+        if m:
+            try:
+                return int(m.group(1).replace(",", ""))
+            except ValueError:
+                pass
+        return None
 
     def parse_listings(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "html.parser")
@@ -197,33 +222,24 @@ class DoorScraper(BaseScraper):
                 if m_s:
                     size = float(m_s.group(1))
 
-            # Detail URL — door uses /buildings/.../properties/... pattern
+            # Detail URL — door uses /properties/<id> per-room pattern.
+            # Only extract from the row (never fall back to building-level
+            # links on the shared container, or every room in a building ends
+            # up pointing at the same building page).
             detail_link = row.select_one("a[href*='/properties/']")
             if not detail_link:
-                detail_link = row.select_one("a[href*='/buildings/']")
-            detail_url = ""
-            if detail_link:
-                href = detail_link.get("href", "")
-                detail_url = href if href.startswith("http") else f"{self.base_url}{href}"
-
-            # Also check building-level link
-            if not detail_url:
-                bld_link = el.select_one("a[href*='/buildings/']")
-                if bld_link:
-                    href = bld_link.get("href", "")
-                    detail_url = href if href.startswith("http") else f"{self.base_url}{href}"
+                logger.warning(f"[door] no /properties/ link in row for {name}, skipping")
+                continue
+            href = detail_link.get("href", "")
+            detail_url = href if href.startswith("http") else f"{self.base_url}{href}"
 
             # ID
             prop_id = ""
-            if detail_url:
-                m_id = re.search(r"/properties/([a-f0-9-]+)", detail_url)
-                if m_id:
-                    prop_id = f"door_{m_id.group(1)[:16]}"
-                else:
-                    m_id = re.search(r"/buildings/([a-f0-9-]+)", detail_url)
-                    if m_id:
-                        prop_id = f"door_{m_id.group(1)[:16]}_{floor or 0}"
-            if not prop_id:
+            m_id = re.search(r"/properties/([a-f0-9-]+)", detail_url)
+            if m_id:
+                prop_id = f"door_{m_id.group(1)[:16]}"
+            else:
+                logger.warning(f"[door] could not parse id from {detail_url}, falling back")
                 safe_name = re.sub(r"\W", "", name)[:12]
                 prop_id = f"door_{safe_name}_{floor or 0}_{rent}"
 

@@ -102,22 +102,50 @@ class SuumoScraper(BaseScraper):
     name = "suumo"
     base_url = "https://suumo.jp"
     rate_limit = 1.5
-    max_pages = 10
+    max_pages = 200
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
         # Default: all Tokyo 23 wards
         self.ward_codes = ward_codes or list(TOKYO_WARD_CODES.values())
+        self._current_ward_code: str = self.ward_codes[0] if self.ward_codes else "13104"
 
     def build_url(self, page: int) -> str:
-        """Build SUUMO search URL for Tokyo rentals, sorted by newest."""
-        sc_params = "&".join(f"sc={code}" for code in self.ward_codes)
+        """Single-ward SUUMO URL with rent ≤10万 (ct=10.0), newest first (po1=25),
+        50 listings per page (maximum allowed by SUUMO).
+        """
         return (
             f"{self.base_url}/jj/chintai/ichiran/FR301FC001/"
-            f"?ar=030&bs=040&ta=13&{sc_params}"
-            f"&cb=0.0&ct=9999999&et=9999999&cn=9999999"
-            f"&po1=25&pc=30&page={page}"
+            f"?ar=030&bs=040&ta=13&sc={self._current_ward_code}"
+            f"&cb=0.0&ct=10.0&et=9999999&cn=9999999"
+            f"&po1=25&pc=50&page={page}"
         )
+
+    async def fetch_latest(self) -> list[dict]:
+        """Fetch each ward as a separate SUUMO query so we can actually
+        paginate through everything. SUUMO truncates hard when multiple sc=
+        are combined in one URL.
+        """
+        all_listings: list[dict] = []
+        for code in self.ward_codes:
+            self._current_ward_code = code
+            ward_name = next((k for k, v in TOKYO_WARD_CODES.items() if v == code), code)
+            logger.info(f"[{self.name}] fetching ward: {ward_name} ({code})")
+            listings = await super().fetch_latest()
+            all_listings.extend(listings)
+            logger.info(f"[{self.name}] {ward_name}: {len(listings)} listings")
+        return all_listings
+
+    def parse_total_count(self, html: str) -> int | None:
+        """SUUMO shows '新宿区エリア12,189件の物件をご紹介' in the header."""
+        m = re.search(r"エリア\s*([\d,]+)\s*件の物件", html)
+        if m:
+            try:
+                return int(m.group(1).replace(",", ""))
+            except ValueError:
+                pass
+        from .base import parse_total_count_japanese
+        return parse_total_count_japanese(html)
 
     def parse_listings(self, html: str) -> list[dict]:
         """Parse SUUMO search results HTML into property dicts."""

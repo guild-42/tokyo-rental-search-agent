@@ -51,7 +51,7 @@ class ChintaiScraper(BaseScraper):
     name = "chintai"
     base_url = "https://www.chintai.net"
     rate_limit = 2.0
-    max_pages = 10
+    max_pages = 20
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
@@ -59,11 +59,13 @@ class ChintaiScraper(BaseScraper):
         self._current_ward_code = self.ward_codes[0] if self.ward_codes else "13101"
 
     def build_url(self, page: int) -> str:
-        # CHINTAI only supports single ward code per URL
+        # CHINTAI only supports single ward code per URL.
+        # ct/cf values are in 千円 units: ct=100 = 100 * 千円 = 10万円 上限.
         code = self._current_ward_code
+        filters = "sort=2&cf=0&ct=100"
         if page == 1:
-            return f"{self.base_url}/tokyo/area/{code}/list/?sort=2"
-        return f"{self.base_url}/tokyo/area/{code}/list/page{page}/?o=10&sort=2"
+            return f"{self.base_url}/tokyo/area/{code}/list/?{filters}"
+        return f"{self.base_url}/tokyo/area/{code}/list/page{page}/?o=10&{filters}"
 
     async def fetch_latest(self) -> list[dict]:
         """Override: fetch each ward separately, then combine."""
@@ -76,6 +78,10 @@ class ChintaiScraper(BaseScraper):
             all_listings.extend(listings)
             logger.info(f"[{self.name}] {ward_name}: {len(listings)} listings")
         return all_listings
+
+    def parse_total_count(self, html: str) -> int | None:
+        from .base import parse_total_count_japanese
+        return parse_total_count_japanese(html)
 
     def parse_listings(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "html.parser")

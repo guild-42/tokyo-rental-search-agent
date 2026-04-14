@@ -6,13 +6,14 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .db import get_active_properties, get_stats, init_db
+from .db import get_active_properties, get_stats, init_db, prune_wards
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 _PROJECT_DIR = Path(__file__).parent.parent
 _db_conn = None
 _fetch_task = None
+_fetch_lock = asyncio.Lock()
 
 
 def _get_db_path() -> Path:
@@ -41,56 +43,79 @@ def _get_max_age_days() -> int:
     return int(os.environ.get("MAX_AGE_DAYS", "7"))
 
 
+def _get_interval_minutes() -> int | None:
+    """Return the fetch interval in minutes.
+
+    Preference order:
+      1. FETCH_INTERVAL_MINUTES (new, supports sub-hour cycles)
+      2. FETCH_INTERVAL_HOURS (legacy, integer hours)
+    Returns None if neither is set to a valid positive value.
+    """
+    minutes_raw = os.environ.get("FETCH_INTERVAL_MINUTES", "").strip()
+    if minutes_raw.isdigit() and int(minutes_raw) > 0:
+        return int(minutes_raw)
+    hours_raw = os.environ.get("FETCH_INTERVAL_HOURS", "").strip()
+    if hours_raw.isdigit() and int(hours_raw) > 0:
+        return int(hours_raw) * 60
+    return None
+
+
+async def _run_fetch_once(ward_codes, max_pages):
+    from .orchestrator import fetch_all
+
+    if _fetch_lock.locked():
+        logger.warning("Previous fetch still running — skipping this cycle")
+        return
+    async with _fetch_lock:
+        started = datetime.now()
+        try:
+            logger.info("Scheduled fetch starting...")
+            db_path = _get_db_path()
+            result = await fetch_all(db_path, ward_codes=ward_codes, max_pages=max_pages)
+            elapsed = (datetime.now() - started).total_seconds()
+            logger.info(
+                f"Scheduled fetch complete in {elapsed:.0f}s: "
+                f"{result.total_results} properties, {result.new_inserted} new"
+            )
+        except Exception:
+            logger.exception("Scheduled fetch failed")
+
+
 async def _scheduled_fetch():
     """Background fetch loop.
 
     Two modes:
-      - FETCH_INTERVAL_HOURS=N : run every N hours (preferred, simpler)
+      - FETCH_INTERVAL_MINUTES=N (or legacy FETCH_INTERVAL_HOURS=N) : run every N minutes
       - FETCH_SCHEDULE_HOURS="9,12,15,..." : run at specific hours
-    FETCH_INTERVAL_HOURS takes precedence when both are set.
+    Interval mode takes precedence when both are set.
     """
-    from datetime import datetime, timedelta
-
-    from .orchestrator import fetch_all
-
     max_pages = int(os.environ.get("FETCH_MAX_PAGES", "10"))
     ward_codes_str = os.environ.get("FETCH_WARD_CODES", "")
     ward_codes = [c.strip() for c in ward_codes_str.split(",") if c.strip()] or None
 
-    interval_raw = os.environ.get("FETCH_INTERVAL_HOURS", "").strip()
-    interval_hours = int(interval_raw) if interval_raw.isdigit() and int(interval_raw) > 0 else None
+    interval_minutes = _get_interval_minutes()
 
-    if interval_hours is None and not _get_schedule_hours():
+    if interval_minutes is None and not _get_schedule_hours():
         logger.info("Scheduled fetch disabled (no interval or schedule hours)")
         return
 
-    if interval_hours:
+    if interval_minutes:
         logger.info(
-            f"Fetch scheduler started: interval={interval_hours}h, "
+            f"Fetch scheduler started: interval={interval_minutes}min, "
             f"max_pages={max_pages}, wards={ward_codes or 'all'}"
         )
-        # Run immediately on startup, then every N hours
         first_run = True
         while True:
             if first_run:
                 wait_seconds = 30  # Small delay on startup to let server bind port
                 first_run = False
             else:
-                wait_seconds = interval_hours * 3600
+                wait_seconds = interval_minutes * 60
             next_run = datetime.now() + timedelta(seconds=wait_seconds)
             logger.info(f"Next fetch at {next_run.strftime('%Y-%m-%d %H:%M')} (in {wait_seconds/60:.0f}min)")
             await asyncio.sleep(wait_seconds)
 
-            try:
-                logger.info("Scheduled fetch starting...")
-                db_path = _get_db_path()
-                result = await fetch_all(db_path, ward_codes=ward_codes, max_pages=max_pages)
-                logger.info(
-                    f"Scheduled fetch complete: {result.total_results} properties, "
-                    f"{result.new_inserted} new"
-                )
-            except Exception:
-                logger.exception("Scheduled fetch failed")
+            await _run_fetch_once(ward_codes, max_pages)
         return
 
     # Specific-hours mode
@@ -117,16 +142,7 @@ async def _scheduled_fetch():
         logger.info(f"Next fetch at {next_run.strftime('%H:%M')} (in {wait_seconds/60:.0f}min)")
         await asyncio.sleep(wait_seconds)
 
-        try:
-            logger.info("Scheduled fetch starting...")
-            db_path = _get_db_path()
-            result = await fetch_all(db_path, ward_codes=ward_codes, max_pages=max_pages)
-            logger.info(
-                f"Scheduled fetch complete: {result.total_results} properties, "
-                f"{result.new_inserted} new"
-            )
-        except Exception:
-            logger.exception("Scheduled fetch failed")
+        await _run_fetch_once(ward_codes, max_pages)
 
         await asyncio.sleep(61)
 
@@ -139,6 +155,10 @@ async def lifespan(app: FastAPI):
     db_path = _get_db_path()
     _db_conn = init_db(db_path)
     logger.info(f"Server starting with DB: {db_path}")
+
+    # Enforce ward allow-list at startup so stale data from wider past fetches is cleared.
+    from .orchestrator import ALLOWED_WARD_NAMES
+    prune_wards(_db_conn, list(ALLOWED_WARD_NAMES))
 
     # Start background fetch scheduler
     _fetch_task = asyncio.create_task(_scheduled_fetch())
