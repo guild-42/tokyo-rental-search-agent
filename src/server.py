@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from .db import get_active_properties, get_stats, init_db, prune_wards
+from .db import get_active_properties, get_stats, init_db, prune_rent_cap, prune_wards
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +158,9 @@ async def lifespan(app: FastAPI):
 
     # Enforce ward allow-list at startup so stale data from wider past fetches is cleared.
     from .orchestrator import ALLOWED_WARD_NAMES
+    from .scrapers.constants import RENT_MAX_YEN
     prune_wards(_db_conn, list(ALLOWED_WARD_NAMES))
+    prune_rent_cap(_db_conn, RENT_MAX_YEN)
 
     # Start background fetch scheduler
     _fetch_task = asyncio.create_task(_scheduled_fetch())

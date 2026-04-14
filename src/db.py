@@ -139,6 +139,25 @@ def run_lifecycle(conn: sqlite3.Connection) -> dict:
     return stats
 
 
+def prune_rent_cap(conn: sqlite3.Connection, max_rent_yen: int) -> int:
+    """Delete properties whose rent exceeds the cap (stored as JSON ``rent`` field).
+
+    Legacy rows inserted before the rent filter was deployed can linger for
+    weeks before the 60-day lifecycle sweep picks them up; this lets startup
+    enforce the cap immediately.
+    """
+    cur = conn.execute(
+        "DELETE FROM properties "
+        "WHERE CAST(json_extract(data, '$.rent') AS INTEGER) > ?",
+        (max_rent_yen,),
+    )
+    deleted = cur.rowcount
+    conn.commit()
+    if deleted:
+        logger.info(f"prune_rent_cap: deleted {deleted} rows with rent > {max_rent_yen}")
+    return deleted
+
+
 def prune_wards(conn: sqlite3.Connection, allowed_wards: list[str]) -> int:
     """Delete properties whose ward is not in the allowed list.
 

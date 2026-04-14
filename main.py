@@ -137,9 +137,10 @@ def cmd_verify(args):
 
 
 def cmd_prune(args):
-    """Delete DB rows outside the allowed wards (新宿 / 渋谷 / 中野)."""
-    from src.db import init_db, prune_wards
+    """Delete DB rows outside the allowed wards and above the rent cap."""
+    from src.db import init_db, prune_rent_cap, prune_wards
     from src.orchestrator import ALLOWED_WARD_NAMES
+    from src.scrapers.constants import RENT_MAX_YEN
 
     db_path = Path(args.db) if args.db else DEFAULT_DB_PATH
     if not db_path.exists():
@@ -147,9 +148,10 @@ def cmd_prune(args):
         return
 
     conn = init_db(db_path)
-    deleted = prune_wards(conn, list(ALLOWED_WARD_NAMES))
+    by_ward = prune_wards(conn, list(ALLOWED_WARD_NAMES))
+    by_rent = prune_rent_cap(conn, RENT_MAX_YEN)
     conn.close()
-    print(f"Pruned {deleted} properties outside {list(ALLOWED_WARD_NAMES)}")
+    print(f"Pruned {by_ward} outside {list(ALLOWED_WARD_NAMES)}, {by_rent} with rent > {RENT_MAX_YEN}")
 
 
 def cmd_migrate(args):
