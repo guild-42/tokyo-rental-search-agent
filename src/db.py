@@ -30,6 +30,13 @@ CREATE INDEX IF NOT EXISTS idx_properties_last_seen ON properties(last_seen);
 CREATE INDEX IF NOT EXISTS idx_properties_first_seen ON properties(first_seen);
 CREATE INDEX IF NOT EXISTS idx_properties_source ON properties(source);
 CREATE INDEX IF NOT EXISTS idx_properties_dedup_key ON properties(dedup_key);
+
+CREATE TABLE IF NOT EXISTS geocache (
+    address TEXT PRIMARY KEY,
+    lat REAL,
+    lng REAL,
+    cached_at TEXT
+);
 """
 
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import copy
 import logging
 import re
 
@@ -102,39 +104,107 @@ class SuumoScraper(BaseScraper):
     name = "suumo"
     base_url = "https://suumo.jp"
     rate_limit = 1.5
-    max_pages = 200
+    max_pages = 50   # SUUMO caps pagination at ~50; each (ward × band) gets its own budget
+
+    # SUUMO's result pagination caps at ~50 pages regardless of result size, so
+    # we split each ward into (layout × rent-band) sub-queries. Each sub-query
+    # has its own 50-page budget, which is enough to drain small bands outright
+    # and to unlock the heavy "1R" / "1K" buckets that would otherwise be
+    # truncated. md=XX values are SUUMO's layout filter (1=ワンルーム, 2=1K, …).
+    #
+    # Rent bands are in 万円 units (cb=low, ct=high) — each band covers a
+    # price slice. The full cross product is generated on demand.
+    _LAYOUT_BANDS: tuple[tuple[str, ...], ...] = (
+        ("01",),           # ワンルーム — large, split by rent
+        ("02",),           # 1K — large, split by rent
+        ("03", "04"),      # 1DK + 1LDK — small
+        ("05", "06"),      # 2K + 2DK — small
+        ("07", "08", "09", "10", "11"),  # 2LDK+ — usually empty under 10万
+    )
+    _RENT_BANDS_LARGE: tuple[tuple[float, float], ...] = (
+        (0.0, 5.0),
+        (5.0, 7.5),
+        (7.5, 10.0),
+    )
+    _RENT_BANDS_SMALL: tuple[tuple[float, float], ...] = (
+        (0.0, 10.0),
+    )
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
         # Default: all Tokyo 23 wards
         self.ward_codes = ward_codes or list(TOKYO_WARD_CODES.values())
         self._current_ward_code: str = self.ward_codes[0] if self.ward_codes else "13104"
+        self._current_md: tuple[str, ...] = ()
+        self._current_rent_band: tuple[float, float] = (0.0, 10.0)
 
     def build_url(self, page: int) -> str:
-        """Single-ward SUUMO URL with rent ≤10万 (ct=10.0), newest first (po1=25),
-        50 listings per page (maximum allowed by SUUMO).
-        """
+        """Single ward + layout-band + rent-band SUUMO URL, newest first, pc=50."""
+        md_params = "".join(f"&md={m}" for m in self._current_md)
+        cb, ct = self._current_rent_band
         return (
             f"{self.base_url}/jj/chintai/ichiran/FR301FC001/"
             f"?ar=030&bs=040&ta=13&sc={self._current_ward_code}"
-            f"&cb=0.0&ct=10.0&et=9999999&cn=9999999"
+            f"&cb={cb}&ct={ct}&et=9999999&cn=9999999"
+            f"{md_params}"
             f"&po1=25&pc=50&page={page}"
         )
 
-    async def fetch_latest(self) -> list[dict]:
-        """Fetch each ward as a separate SUUMO query so we can actually
-        paginate through everything. SUUMO truncates hard when multiple sc=
-        are combined in one URL.
+    @classmethod
+    def _bands_for_layout(cls, md_group: tuple[str, ...]) -> tuple[tuple[float, float], ...]:
+        # ワンルーム / 1K are the big buckets and need rent-band splits to stay
+        # under SUUMO's ~50 page cap. The small groups fit inside one query.
+        if md_group in (("01",), ("02",)):
+            return cls._RENT_BANDS_LARGE
+        return cls._RENT_BANDS_SMALL
+
+    async def _fetch_ward(self, code: str) -> list[dict]:
+        """Drain every (layout × rent-band) sub-query for one ward.
+
+        Runs in a dedicated scraper clone so concurrent wards don't race on
+        ``_current_ward_code`` / ``_current_md`` / ``_current_rent_band``.
         """
-        all_listings: list[dict] = []
-        for code in self.ward_codes:
-            self._current_ward_code = code
-            ward_name = next((k for k, v in TOKYO_WARD_CODES.items() if v == code), code)
-            logger.info(f"[{self.name}] fetching ward: {ward_name} ({code})")
-            listings = await super().fetch_latest()
-            all_listings.extend(listings)
-            logger.info(f"[{self.name}] {ward_name}: {len(listings)} listings")
-        return all_listings
+        ward_name = next((k for k, v in TOKYO_WARD_CODES.items() if v == code), code)
+        ward_listings: list[dict] = []
+        for md_group in self._LAYOUT_BANDS:
+            for rent_band in self._bands_for_layout(md_group):
+                self._current_ward_code = code
+                self._current_md = md_group
+                self._current_rent_band = rent_band
+                label = f"{'+'.join(md_group)} {rent_band[0]}-{rent_band[1]}万"
+                logger.info(f"[{self.name}] {ward_name}: band {label}")
+                listings = await super().fetch_latest()
+                ward_listings.extend(listings)
+        logger.info(f"[{self.name}] {ward_name}: {len(ward_listings)} total listings")
+        return ward_listings
+
+    async def fetch_latest(self) -> list[dict]:
+        """Per ward × layout × rent-band sub-queries.
+
+        Wards run in parallel (each with its own scraper clone) so the total
+        wall-clock is bounded by a single ward's bands × pages, not by all
+        three wards sequentially. Each sub-query gets its own 50-page budget,
+        sidestepping SUUMO's per-query ceiling that otherwise caps ward-wide
+        fetches at ~2,500 listings.
+        """
+        if not self.ward_codes:
+            return []
+
+        async def _per_ward(code: str) -> list[dict]:
+            clone = copy.copy(self)
+            clone._ua_index = 0
+            return await clone._fetch_ward(code)
+
+        chunks = await asyncio.gather(
+            *[_per_ward(code) for code in self.ward_codes], return_exceptions=True
+        )
+        merged: list[dict] = []
+        for ward, chunk in zip(self.ward_codes, chunks):
+            if isinstance(chunk, Exception):
+                logger.error(f"[{self.name}] ward {ward} failed: {chunk}")
+                continue
+            merged.extend(chunk)
+        return merged
 
     def parse_total_count(self, html: str) -> int | None:
         """SUUMO shows '新宿区エリア12,189件の物件をご紹介' in the header."""

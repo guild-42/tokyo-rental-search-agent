@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .db import init_db, mark_stale, run_lifecycle, upsert_properties
 from .dedup import deduplicate
+from .geocoder import Geocoder
 from .models import FetchResult
 from .normalizer import normalize_batch
 from .scrapers.apamanshop import ApamanshopScraper
@@ -106,6 +107,15 @@ async def fetch_all(db_path: Path, ward_codes: list[str] | None = None, max_page
         # Deduplicate
         properties, removed = deduplicate(properties)
         result.duplicates_removed = removed
+
+        # Populate lat/lng via Nominatim (cache-first). Rate-limited to
+        # 1 req/sec with a per-cycle cap so we don't block a fetch on 17K
+        # cold-cache lookups — the cache fills up over subsequent cycles.
+        try:
+            gc = Geocoder(conn, max_new=300)
+            await gc.resolve_many(properties)
+        except Exception:
+            logger.exception("geocoding step failed; continuing with station fallback")
 
         # Upsert into SQLite
         upsert_stats = upsert_properties(conn, properties)
