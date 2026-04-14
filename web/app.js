@@ -4,6 +4,7 @@ let allProperties = [];
 let filteredProperties = [];
 let map;
 let markers = [];
+let markerCluster = null;
 let bookmarks = new Set();
 let viewed = new Set();
 
@@ -216,6 +217,17 @@ function initMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   }).addTo(map);
+
+  // Marker clustering: with 8k+ pins densely packed around stations, plain
+  // markers overlap and hide each other. A cluster group aggregates them by
+  // pixel distance so every property is represented on screen.
+  markerCluster = L.markerClusterGroup({
+    chunkedLoading: true,
+    maxClusterRadius: 60,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: true,
+  });
+  map.addLayer(markerCluster);
 
   // Re-filter list as the user pans/zooms. Debounced so dragging stays smooth.
   var debouncedViewChange = debounce(onMapViewChanged, 120);
@@ -586,12 +598,14 @@ function createPropertyCard(p) {
 var shouldAutoFitBounds = true;
 
 function renderMap() {
-  markers.forEach(function(m) { map.removeLayer(m); });
+  if (markerCluster) {
+    markerCluster.clearLayers();
+  }
   markers = [];
 
   var withCoords = filteredProperties.filter(function(p) { return p.lat && p.lng; });
-  // No hard cap — Leaflet handles ~10k markers fine, and the old 500 cap was
-  // silently dropping most pins once results exceeded that.
+  // No hard cap — marker cluster handles 10k+ markers fine, and the old
+  // 500 cap was silently dropping most pins once results exceeded that.
   var toPlot = withCoords;
 
   toPlot.forEach(function(p) {
@@ -610,7 +624,12 @@ function renderMap() {
       iconAnchor: [size/2, size/2],
     });
 
-    var marker = L.marker([p.lat, p.lng], { icon: icon }).addTo(map);
+    var marker = L.marker([p.lat, p.lng], { icon: icon });
+    if (markerCluster) {
+      markerCluster.addLayer(marker);
+    } else {
+      marker.addTo(map);
+    }
 
     var popupDiv = document.createElement("div");
 
