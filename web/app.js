@@ -11,6 +11,7 @@ let viewed = new Set();
 var LS_FILTERS_KEY = "rental_filters";
 var LS_BOOKMARKS_KEY = "rental_bookmarks";
 var LS_VIEWED_KEY = "rental_viewed";
+var LS_LIST_COLLAPSED_KEY = "rental_list_collapsed";
 
 var WARD_COORDS = {
   "千代田区": [35.6940, 139.7536], "中央区": [35.6706, 139.7727],
@@ -204,12 +205,37 @@ document.addEventListener("DOMContentLoaded", async function() {
   loadBookmarks();
   loadViewed();
   initMap();
+  setupListToggle();
   await loadData();
   restoreFilters();
   setupFilters();
   applyPendingDynamicFilters();
   applyFilters();
 });
+
+function setupListToggle() {
+  var btn = document.getElementById("btn-toggle-list");
+  var content = document.getElementById("content");
+  if (!btn || !content) return;
+
+  var collapsed = localStorage.getItem(LS_LIST_COLLAPSED_KEY) === "1";
+  applyListCollapsed(collapsed);
+
+  btn.addEventListener("click", function() {
+    var next = !content.classList.contains("list-collapsed");
+    applyListCollapsed(next);
+    localStorage.setItem(LS_LIST_COLLAPSED_KEY, next ? "1" : "0");
+  });
+
+  function applyListCollapsed(flag) {
+    content.classList.toggle("list-collapsed", flag);
+    btn.setAttribute("aria-expanded", flag ? "false" : "true");
+    btn.textContent = flag ? "▸" : "▾";
+    btn.title = flag ? "一覧を開く" : "一覧を折りたたむ";
+    // Map container just resized — tell Leaflet or pins drift.
+    if (map) setTimeout(function() { map.invalidateSize(); }, 50);
+  }
+}
 
 function initMap() {
   map = L.map("map").setView([35.6812, 139.7671], 11);

@@ -148,14 +148,29 @@ main {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 8px 16px;
   background: #fff;
   border-bottom: 1px solid #eee;
 }
 
+#btn-toggle-list {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+}
+
+#btn-toggle-list:hover { background: #f0f0f0; }
+
 #filtered-count {
   font-size: 13px;
   color: #666;
+  flex: 1;
 }
 
 #sort-select {
@@ -170,6 +185,11 @@ main {
   overflow-y: auto;
   padding: 8px 16px;
 }
+
+/* Folded list: hide the list pane entirely and let the map eat the space. */
+#content.list-collapsed #property-list { display: none; }
+#content.list-collapsed #map-container { flex: 1; height: auto; }
+#content.list-collapsed #sort-select { display: none; }
 
 /* Property Card */
 .property-card {
