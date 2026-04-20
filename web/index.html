@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <link rel="stylesheet" href="style.css?v=20260415c">
+  <link rel="stylesheet" href="style.css?v=20260420">
 </head>
 <body>
   <header>
@@ -22,6 +22,11 @@
 
   <main>
     <aside id="filter-panel">
+      <div id="filter-toggle-bar">
+        <button id="btn-toggle-filter" type="button">▾ フィルタ</button>
+        <button id="btn-reset-mobile" onclick="resetFilters()">リセット</button>
+      </div>
+      <div id="filter-body">
       <h2>フィルタ</h2>
 
       <label>予算 (万円)</label>
@@ -78,6 +83,7 @@
       </label>
 
       <button id="btn-reset" onclick="resetFilters()">フィルタリセット</button>
+      </div><!-- /filter-body -->
     </aside>
 
     <section id="content">
@@ -102,6 +108,6 @@
     </section>
   </main>
 
-  <script src="app.js?v=20260415c"></script>
+  <script src="app.js?v=20260420"></script>
 </body>
 </html>

@@ -60,6 +60,7 @@ async def fetch_all(db_path: Path, ward_codes: list[str] | None = None, max_page
     backward compatibility but ignored.
     """
     ward_codes = _enforce_allowed_wards(ward_codes)
+    prev_fetch_at = datetime.now().isoformat()
     result = FetchResult(fetched_at=datetime.now())
     conn = init_db(db_path)
 
@@ -125,6 +126,13 @@ async def fetch_all(db_path: Path, ward_codes: list[str] | None = None, max_page
 
         # Lifecycle: delete very old properties (not seen in 60+ days)
         run_lifecycle(conn)
+
+        # Notify about new matching properties via email
+        try:
+            from .notifier import notify_if_needed
+            await notify_if_needed(conn, prev_fetch_at)
+        except Exception:
+            logger.exception("notification step failed")
 
     finally:
         conn.close()

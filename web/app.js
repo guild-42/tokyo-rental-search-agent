@@ -212,6 +212,7 @@ document.addEventListener("DOMContentLoaded", async function() {
   loadViewed();
   initMap();
   setupListToggle();
+  setupFilterToggle();
   await loadData();
   restoreFilters();
   setupFilters();
@@ -241,6 +242,24 @@ function setupListToggle() {
     // Map container just resized — tell Leaflet or pins drift.
     if (map) setTimeout(function() { map.invalidateSize(); }, 50);
   }
+}
+
+function setupFilterToggle() {
+  var btn = document.getElementById("btn-toggle-filter");
+  var body = document.getElementById("filter-body");
+  if (!btn || !body) return;
+
+  var isMobile = window.matchMedia("(max-width: 768px)").matches;
+  if (isMobile) {
+    body.classList.add("collapsed");
+    btn.textContent = "▸ フィルタ";
+  }
+
+  btn.addEventListener("click", function() {
+    var collapsed = body.classList.toggle("collapsed");
+    btn.textContent = collapsed ? "▸ フィルタ" : "▾ フィルタ";
+    if (map) setTimeout(function() { map.invalidateSize(); }, 50);
+  });
 }
 
 function initMap() {
