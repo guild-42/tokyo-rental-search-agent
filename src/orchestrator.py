@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 
 # Business rule: this deployment only covers 新宿 / 渋谷 / 中野.
 # Any request to fetch other wards is silently forced back to these three.
-ALLOWED_WARD_CODES: tuple[str, ...] = ("13104", "13113", "13114")
-ALLOWED_WARD_NAMES: tuple[str, ...] = ("新宿区", "渋谷区", "中野区")
+ALLOWED_WARD_CODES: tuple[str, ...] = ("13104", "13113", "13114", "13115")
+ALLOWED_WARD_NAMES: tuple[str, ...] = ("新宿区", "渋谷区", "中野区", "杉並区")
 
 
 def _enforce_allowed_wards(ward_codes: list[str] | None) -> list[str]:
