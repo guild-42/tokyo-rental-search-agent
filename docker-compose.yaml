@@ -1,25 +1,25 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     expose:
       - "8080"
     volumes:
       - rental-data:/app/data
     environment:
-      - TZ=Asia/Tokyo
-      - FETCH_INTERVAL_MINUTES=10
-      - FETCH_MAX_PAGES=10
-      - FETCH_WARD_CODES=13104,13113,13114,13115
-      - MAX_AGE_DAYS=30
-      - DB_PATH=/app/data/rental.db
+      TZ: Asia/Tokyo
+      PORT: 8080
+      FETCH_INTERVAL_MINUTES: 10
+      FETCH_MAX_PAGES: 10
+      FETCH_WARD_CODES: 13104,13113,13114,13115
+      MAX_AGE_DAYS: 30
+      DB_PATH: /app/data/rental.db
+      NOTIFY_ENABLED: 0
     restart: unless-stopped
-    labels:
-      - traefik.enable=true
-      - traefik.http.middlewares.gzip.compress=true
-      - traefik.http.routers.rental.rule=Host(`7days.actraise.org`)
-      - traefik.http.routers.rental.entrypoints=http
-      - traefik.http.routers.rental.middlewares=gzip
-      - traefik.http.services.rental.loadbalancer.server.port=8080
+    networks:
+      - coolify
+      - default
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
@@ -27,5 +27,10 @@ services:
       retries: 3
       start_period: 30s
 
+networks:
+  coolify:
+    external: true
+
 volumes:
   rental-data:
+    driver: local
