@@ -48,7 +48,7 @@ class HomesScraper(BaseScraper):
     name = "homes"
     base_url = "https://www.homes.co.jp"
     rate_limit = 3.0
-    max_pages = 60
+    max_pages = 5
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()

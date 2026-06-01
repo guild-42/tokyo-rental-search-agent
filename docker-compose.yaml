@@ -1,3 +1,15 @@
+# 東京賃貸サーチエージェント
+#
+# 本番デプロイ (guild42-vm-01 / Coolify):
+#   - Coolify は Dockerfile ビルドパックでこのアプリをビルド・起動する
+#     （build pack: dockerfile / port: 8080 / domain: https://7d.guild42.net）
+#   - 公開経路: Cloudflare → gcp Tunnel(VM常駐) → https://localhost:443(Traefik) → app:8080
+#     ※ Cloudflare Tunnel はホストの systemd cloudflared (gcp tunnel) を使う。
+#       compose 内に cloudflared サイドカーは置かない（ホストトンネルと競合するため）。
+#   - Traefik へのルーティングは Coolify がドメイン設定から自動生成する。
+#
+# ローカル開発は docker-compose.local.yaml を使用（ホスト 8080 に直接公開）。
+
 services:
   app:
     build:
@@ -23,16 +35,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      app:
-        condition: service_healthy
 
 volumes:
   rental-data:

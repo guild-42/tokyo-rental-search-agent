@@ -74,7 +74,7 @@ class Geocoder:
         await gc.resolve_many(properties)   # populates property.lat/lng in place
     """
 
-    def __init__(self, conn: sqlite3.Connection, *, max_new: int = 300):
+    def __init__(self, conn: sqlite3.Connection, *, max_new: int = 50):
         self.conn = conn
         # Per-run safety cap on live Nominatim calls; keeps one fetch cycle
         # from hammering the service when a brand-new DB needs ~17k lookups.

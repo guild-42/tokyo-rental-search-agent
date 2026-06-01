@@ -34,7 +34,7 @@ class DoorScraper(BaseScraper):
     name = "door"
     base_url = "https://door.ac"
     rate_limit = 2.0
-    max_pages = 150
+    max_pages = 5
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()

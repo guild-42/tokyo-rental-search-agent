@@ -49,7 +49,7 @@ class YahooRealestateScraper(BaseScraper):
     # Yahoo doesn't accept any URL-based rent filter we can find. We grab
     # deeply, rely on base.py's early-stop when a whole page > 10万, and on
     # the orchestrator's final rent filter.
-    max_pages = 100
+    max_pages = 5
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()

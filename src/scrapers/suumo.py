@@ -104,7 +104,7 @@ class SuumoScraper(BaseScraper):
     name = "suumo"
     base_url = "https://suumo.jp"
     rate_limit = 1.5
-    max_pages = 50   # SUUMO caps pagination at ~50; each (ward × band) gets its own budget
+    max_pages = 3   # SUUMO caps pagination at ~50; each (ward × band) gets its own budget
 
     # SUUMO's result pagination caps at ~50 pages regardless of result size, so
     # we split each ward into (layout × rent-band) sub-queries. Each sub-query

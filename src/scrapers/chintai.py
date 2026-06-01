@@ -51,7 +51,7 @@ class ChintaiScraper(BaseScraper):
     name = "chintai"
     base_url = "https://www.chintai.net"
     rate_limit = 2.0
-    max_pages = 20
+    max_pages = 5
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()

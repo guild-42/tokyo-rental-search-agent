@@ -30,7 +30,7 @@ class EheyaScraper(BaseScraper):
     name = "eheya"
     base_url = "https://www.eheya.net"
     rate_limit = 2.0
-    max_pages = 30
+    max_pages = 5
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
