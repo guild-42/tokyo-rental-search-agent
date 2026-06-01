@@ -100,8 +100,21 @@ class BaseScraper(ABC):
             try:
                 headers = {
                     "User-Agent": self._next_ua(),
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                     "Accept-Language": "ja,en-US;q=0.7,en;q=0.3",
+                    "Accept-Encoding": "gzip, deflate, br, zstd",
+                    "Cache-Control": "max-age=0",
+                    "DNT": "1",
+                    "Upgrade-Insecure-Requests": "1",
+                    "Sec-Fetch-Dest": "document",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-User": "?1",
+                    "sec-ch-ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                    "sec-ch-ua-mobile": "?0",
+                    "sec-ch-ua-platform": '"macOS"',
+                    "Priority": "u=0, i",
+                    "Referer": self.base_url or "https://www.google.com/",
                 }
                 resp = await client.get(url, headers=headers, timeout=self.timeout, follow_redirects=True)
                 if resp.status_code == 202:

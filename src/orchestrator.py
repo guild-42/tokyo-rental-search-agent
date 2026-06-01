@@ -69,7 +69,7 @@ async def fetch_all(db_path: Path, ward_codes: list[str] | None = None, max_page
         scrapers = [
             SuumoScraper(ward_codes=ward_codes),
             ChintaiScraper(ward_codes=ward_codes),
-            # HomesScraper(ward_codes=ward_codes),  # LOCAL: 202 throttle blocks cycle
+            HomesScraper(ward_codes=ward_codes),
             YahooRealestateScraper(ward_codes=ward_codes),
             DoorScraper(ward_codes=ward_codes),
             EheyaScraper(ward_codes=ward_codes),
@@ -80,8 +80,16 @@ async def fetch_all(db_path: Path, ward_codes: list[str] | None = None, max_page
         # per-source max_pages (set as a class attribute).
         all_raw: list[dict] = []
         tasks = []
+
+        async def _with_timeout(s, timeout_s=300):
+            try:
+                return await asyncio.wait_for(s.fetch_latest(), timeout=timeout_s)
+            except asyncio.TimeoutError:
+                logger.warning(f"[{s.name}] timed out after {timeout_s}s, skipping this cycle")
+                return []
+
         for scraper in scrapers:
-            tasks.append(scraper.fetch_latest())
+            tasks.append(_with_timeout(scraper))
             result.sources_searched.append(scraper.name)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)

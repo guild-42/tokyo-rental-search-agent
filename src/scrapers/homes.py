@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -68,16 +69,37 @@ class HomesScraper(BaseScraper):
         return f"{self.base_url}/chintai/tokyo/list/?{filters}&page={page}"
 
     async def fetch_latest(self) -> list[dict]:
-        """Override: fetch each ward separately, then combine."""
+        """Override: fetch each ward separately, then combine.
+
+        Resilience: 渋谷 (13113) is reordered LAST because homes.co.jp
+        throttles it the hardest (HTTP 202). Per-ward try/except so one
+        failed ward doesn't kill the rest. CancelledError (from the
+        orchestrator's wait_for) returns the partial result instead of
+        propagating, so we keep whatever wards completed before timeout.
+        """
+        # Push 渋谷 to the back of the queue (hardest to scrape).
+        codes = [c for c in self.ward_codes if c != "13113"] + (
+            ["13113"] if "13113" in self.ward_codes else []
+        )
         all_listings: list[dict] = []
-        for code in self.ward_codes:
+        for code in codes:
             slug = HOMES_WARD_SLUGS.get(code)
             if not slug:
                 continue
             self._current_slug = slug
             ward_name = next((k for k, v in HOMES_WARD_SLUGS.items() if v == slug), code)
             logger.info(f"[{self.name}] fetching ward: {ward_name} ({slug})")
-            listings = await super().fetch_latest()
+            try:
+                listings = await super().fetch_latest()
+            except asyncio.CancelledError:
+                logger.warning(
+                    f"[{self.name}] cancelled during {ward_name}, "
+                    f"returning {len(all_listings)} partial listings"
+                )
+                return all_listings
+            except Exception as e:
+                logger.warning(f"[{self.name}] {ward_name} failed: {e}, skipping")
+                continue
             all_listings.extend(listings)
             logger.info(f"[{self.name}] {ward_name}: {len(listings)} listings")
         return all_listings
