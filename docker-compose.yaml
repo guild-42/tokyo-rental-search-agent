@@ -17,9 +17,6 @@ services:
       DB_PATH: /app/data/rental.db
       NOTIFY_ENABLED: 0
     restart: unless-stopped
-    networks:
-      - coolify
-      - default
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
@@ -27,9 +24,15 @@ services:
       retries: 3
       start_period: 30s
 
-networks:
-  coolify:
-    external: true
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      app:
+        condition: service_healthy
 
 volumes:
   rental-data:
