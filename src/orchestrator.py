@@ -13,6 +13,7 @@ from .geocoder import Geocoder
 from .models import FetchResult
 from .normalizer import normalize_batch
 from .scrapers.apamanshop import ApamanshopScraper
+from .scrapers.athome import AtHomeScraper
 from .scrapers.chintai import ChintaiScraper
 from .scrapers.constants import RENT_MAX_YEN
 from .scrapers.door import DoorScraper
@@ -74,6 +75,7 @@ async def fetch_all(db_path: Path, ward_codes: list[str] | None = None, max_page
             DoorScraper(ward_codes=ward_codes),
             EheyaScraper(ward_codes=ward_codes),
             ApamanshopScraper(ward_codes=ward_codes),
+            AtHomeScraper(ward_codes=ward_codes),
         ]
 
         # Fetch from all sources in parallel — each scraper uses its own

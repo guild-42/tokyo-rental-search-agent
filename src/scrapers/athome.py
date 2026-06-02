@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -36,21 +37,71 @@ ATHOME_WARD_CODES: dict[str, str] = {
     "葛飾区": "13122", "江戸川区": "13123",
 }
 
+# athome URLs are per-ward path slugs (romaji + "-city"), e.g. shinjuku-city.
+ATHOME_WARD_SLUGS: dict[str, str] = {
+    "13101": "chiyoda-city", "13102": "chuo-city", "13103": "minato-city",
+    "13104": "shinjuku-city", "13105": "bunkyo-city", "13106": "taito-city",
+    "13107": "sumida-city", "13108": "koto-city", "13109": "shinagawa-city",
+    "13110": "meguro-city", "13111": "ota-city", "13112": "setagaya-city",
+    "13113": "shibuya-city", "13114": "nakano-city", "13115": "suginami-city",
+    "13116": "toshima-city", "13117": "kita-city", "13118": "arakawa-city",
+    "13119": "itabashi-city", "13120": "nerima-city", "13121": "adachi-city",
+    "13122": "katsushika-city", "13123": "edogawa-city",
+}
+
 
 class AtHomeScraper(BaseScraper):
     """Scraper for at home rental listings."""
 
     name = "athome"
     base_url = "https://www.athome.co.jp"
-    rate_limit = 2.0
+    # athome serves a JS "認証中" interstitial under rapid access, so pace
+    # requests generously to stay under its bot-protection threshold.
+    rate_limit = 4.0
     max_pages = 5
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
         super().__init__()
         self.ward_codes = ward_codes or list(ATHOME_WARD_CODES.values())
+        first = self.ward_codes[0] if self.ward_codes else "13104"
+        self._current_slug = ATHOME_WARD_SLUGS.get(first, "shinjuku-city")
 
     def build_url(self, page: int) -> str:
-        return f"{self.base_url}/chintai/tokyo/list/?DOWN=2&page={page}"
+        # Per-ward slug path, newest-first, path-based pagination.
+        base = f"{self.base_url}/chintai/tokyo/{self._current_slug}/list"
+        if page == 1:
+            return f"{base}/?bukken-sort=newdate"
+        return f"{base}/page{page}/?bukken-sort=newdate"
+
+    async def fetch_latest(self) -> list[dict]:
+        """Fetch each ward separately (athome paths are per-ward slugs).
+
+        Resilience mirrors HOME'S: athome throttles with a "認証中" page
+        (HTTP 200, no listings) under load, so isolate each ward with
+        try/except — one challenged ward shouldn't kill the rest. A
+        CancelledError (orchestrator timeout) returns partial results.
+        """
+        all_listings: list[dict] = []
+        for code in self.ward_codes:
+            slug = ATHOME_WARD_SLUGS.get(code)
+            if not slug:
+                continue
+            self._current_slug = slug
+            logger.info(f"[athome] fetching ward: {code} ({slug})")
+            try:
+                listings = await super().fetch_latest()
+            except asyncio.CancelledError:
+                logger.warning(
+                    f"[athome] cancelled during {slug}, "
+                    f"returning {len(all_listings)} partial listings"
+                )
+                return all_listings
+            except Exception as e:
+                logger.warning(f"[athome] {slug} failed: {e}, skipping")
+                continue
+            all_listings.extend(listings)
+            logger.info(f"[athome] {slug}: {len(listings)} listings")
+        return all_listings
 
     def parse_listings(self, html: str) -> list[dict]:
         soup = BeautifulSoup(html, "html.parser")
@@ -76,33 +127,35 @@ class AtHomeScraper(BaseScraper):
             title_el = el.select_one(".p-property__title")
         name = title_el.text.strip() if title_el else ""
 
-        # Address
+        # Address + station access.
+        # Current HTML uses dl.p-property__information-hint with EMPTY <dt>;
+        # the <dd>s are positional/content-based: an address line (contains
+        # 区/市 but no 駅), an access line (contains 駅 + 徒歩), and a building
+        # type line. Detect by content rather than dt labels.
         address = ""
         ward = ""
+        stations: list[dict] = []
         info_hints = el.select("dl.p-property__information-hint")
         for dl in info_hints:
-            dt = dl.select_one("dt")
             dd = dl.select_one("dd")
-            if dt and dd and "所在地" in dt.text:
-                address = dd.text.strip()
-                m = re.search(r"東京都(.+?区)", address)
-                if m:
-                    ward = m.group(1)
-                break
-
-        # Station access
-        stations = []
-        for dl in info_hints:
-            dt = dl.select_one("dt")
-            dd = dl.select_one("dd")
-            if dt and dd and "交通" in dt.text:
-                text = dd.text.strip()
-                for m in re.finditer(r"(.+?線?)[/／\s]+(.+?駅)\s*.*?徒歩\s*(\d+)分", text):
+            if not dd:
+                continue
+            text = dd.get_text(" ", strip=True)
+            if "駅" in text and "徒歩" in text:
+                for m in re.finditer(
+                    r"([^\s「」/／]+線)\s*[「『]?([^「」『』\s]+?)[」』]?\s*駅\s*徒歩\s*(\d+)\s*分",
+                    text,
+                ):
                     stations.append({
                         "line": m.group(1).strip(),
                         "station": m.group(2).strip(),
                         "walk_minutes": int(m.group(3)),
                     })
+            elif not address and re.search(r"[都道府県]?\S*?[区市]\S", text):
+                address = text
+                m = re.search(r"(\S+?[区市])", text)
+                if m:
+                    ward = m.group(1)
 
         # Image
         img_el = el.select_one("img.js-imgarea")
@@ -155,14 +208,14 @@ class AtHomeScraper(BaseScraper):
                     if layout == "ワンルーム":
                         layout = "1R"
 
-            # Size
-            size_els = box.select("div.p-property__information-data")
-            for se in size_els:
-                text = se.text.strip()
-                m_s = re.search(r"([\d.]+)\s*m", text)
-                if m_s:
+            # Size — current HTML embeds it in the room box text (e.g. "43.50m²").
+            box_text = box.get_text(" ", strip=True)
+            m_s = re.search(r"([\d.]+)\s*(?:m²|m2|㎡|平米|平方メートル)", box_text)
+            if m_s:
+                try:
                     size = float(m_s.group(1))
-                    break
+                except ValueError:
+                    size = None
 
             # Detail URL
             detail_link = box.select_one("a[href*='/chintai/']")
