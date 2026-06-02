@@ -2,5 +2,5 @@
 
 from __future__ import annotations
 
-RENT_MAX_YEN = 100_000
-RENT_MAX_MAN = 10
+RENT_MAX_YEN = 120_000
+RENT_MAX_MAN = 12

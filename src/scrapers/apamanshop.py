@@ -74,9 +74,9 @@ class ApamanshopScraper(BaseScraper):
         self._current_code = self.apaman_codes[0]
 
     def build_url(self, page: int) -> str:
-        # tinryo1 / tinryo2 are rent min / max in yen units. 100000 = 10万円.
+        # tinryo1 / tinryo2 are rent min / max in yen units. 120000 = 12万円.
         code = self._current_code
-        filters = "tinryo1=0&tinryo2=100000"
+        filters = "tinryo1=0&tinryo2=120000"
         if page == 1:
             return f"{self.base_url}/tokyo/{code}/?{filters}"
         return f"{self.base_url}/tokyo/{code}/?{filters}&page={page}"

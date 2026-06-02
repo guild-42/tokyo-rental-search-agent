@@ -125,9 +125,10 @@ class SuumoScraper(BaseScraper):
         (0.0, 5.0),
         (5.0, 7.5),
         (7.5, 10.0),
+        (10.0, 12.0),
     )
     _RENT_BANDS_SMALL: tuple[tuple[float, float], ...] = (
-        (0.0, 10.0),
+        (0.0, 12.0),
     )
 
     def __init__(self, ward_codes: list[str] | None = None) -> None:
@@ -136,7 +137,7 @@ class SuumoScraper(BaseScraper):
         self.ward_codes = ward_codes or list(TOKYO_WARD_CODES.values())
         self._current_ward_code: str = self.ward_codes[0] if self.ward_codes else "13104"
         self._current_md: tuple[str, ...] = ()
-        self._current_rent_band: tuple[float, float] = (0.0, 10.0)
+        self._current_rent_band: tuple[float, float] = (0.0, 12.0)
 
     def build_url(self, page: int) -> str:
         """Single ward + layout-band + rent-band SUUMO URL, newest first, pc=50."""
