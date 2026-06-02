@@ -43,8 +43,12 @@ CREATE TABLE IF NOT EXISTS geocache (
 def init_db(db_path: Path) -> sqlite3.Connection:
     """Create tables, indexes, and enable WAL mode."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.execute("PRAGMA journal_mode=WAL")
+    # Wait up to 30s for a competing writer instead of failing immediately.
+    # Critical during rolling deploys, when the old container may still hold
+    # the write lock (mid-fetch) while the new one runs its startup writes.
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.executescript(SCHEMA)
     conn.commit()
     logger.info(f"Database initialized: {db_path}")
