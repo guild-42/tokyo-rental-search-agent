@@ -42,7 +42,7 @@ class EheyaScraper(BaseScraper):
         offset = (page - 1) * 20
         # Best-effort rent filter via the SPA's URL state. Even if eheya's
         # frontend ignores it, client-side rent cap in orchestrator keeps us safe.
-        filters = "detail.priceMax=YEN_120000"
+        filters = "detail.priceMax=YEN_200000"
         if page == 1:
             return f"{self.base_url}/tokyo/area/{code}/search/?{filters}"
         return f"{self.base_url}/tokyo/area/{code}/search/?{filters}&offset={offset}"

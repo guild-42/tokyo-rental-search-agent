@@ -57,11 +57,11 @@ class HomesScraper(BaseScraper):
         self._current_slug = HOMES_WARD_SLUGS.get(self.ward_codes[0], "") if self.ward_codes else ""
 
     def build_url(self, page: int) -> str:
-        # Filter: rent ≤ 12万 (cond[monthmoneyroomh]=12.0), sorted newest first.
+        # Filter: rent ≤ 20万 (cond[monthmoneyroomh]=20.0), sorted newest first.
         # URL-encode the bracketed keys since HOMES expects them bracket-encoded.
         filters = (
             "cond%5Bmonthmoneyroom%5D=0"
-            "&cond%5Bmonthmoneyroomh%5D=12.0"
+            "&cond%5Bmonthmoneyroomh%5D=20.0"
             "&cond%5Bsortby%5D=newdate"
         )
         if self._current_slug:

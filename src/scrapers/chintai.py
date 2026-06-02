@@ -60,9 +60,9 @@ class ChintaiScraper(BaseScraper):
 
     def build_url(self, page: int) -> str:
         # CHINTAI only supports single ward code per URL.
-        # ct/cf values are in 千円 units: ct=120 = 120 * 千円 = 12万円 上限.
+        # ct/cf values are in 千円 units: ct=200 = 200 * 千円 = 20万円 上限.
         code = self._current_ward_code
-        filters = "sort=2&cf=0&ct=120"
+        filters = "sort=2&cf=0&ct=200"
         if page == 1:
             return f"{self.base_url}/tokyo/area/{code}/list/?{filters}"
         return f"{self.base_url}/tokyo/area/{code}/list/page{page}/?o=10&{filters}"
